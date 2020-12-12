@@ -1,5 +1,7 @@
 import { DefinitionInfo, Project, ts } from 'ts-morph';
 import { EOL } from 'os';
+import { relative } from 'path';
+import chalk from 'chalk';
 
 interface ModuleImports {
   code: string[];
@@ -14,9 +16,12 @@ export interface Options {
 }
 
 export function tsImportTypes({ dryRun, organiseImports, tsConfigFilePath }: Options) {
+  console.log(chalk.blue(`- Loading Project: ${relative(process.cwd(), tsConfigFilePath)}`));
   const project = new Project({ tsConfigFilePath });
 
   project.getSourceFiles().forEach(function visitSourceFile(sourceFile) {
+    console.log(chalk.blue(`- Processing File: ${relative(process.cwd(), sourceFile.getFilePath())}`));
+
     const importDeclarations = sourceFile.getImportDeclarations();
     const importsByModuleSpecifierValue: Record<string, ModuleImports> = {};
     const newImports: string[] = [];
