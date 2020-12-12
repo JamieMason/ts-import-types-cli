@@ -5,8 +5,14 @@ import program = require('commander');
 import { resolve } from 'path';
 import { tsImportTypes } from '.';
 
+const sourcePatterns: string[] = [];
+
 program
   .version(require('../package.json').version)
+  .arguments('[patterns...]')
+  .action((args: string[]) => {
+    sourcePatterns.push(...args.filter((arg) => arg && typeof arg === 'string'));
+  })
   .option('-d, --dry-run', 'write output to stdout instead of overwriting files')
   .option('-p, --project [path]', 'path to tsconfig.json')
   .option('-O, --no-organise-imports', "disable use of VS Code's organise imports refactoring")
@@ -29,6 +35,7 @@ try {
   tsImportTypes({
     dryRun,
     organiseImports,
+    sourcePatterns,
     tsConfigFilePath,
   });
 } catch (err) {

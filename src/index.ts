@@ -12,15 +12,20 @@ interface ModuleImports {
 export interface Options {
   dryRun: boolean;
   organiseImports: boolean;
+  sourcePatterns: string[];
   tsConfigFilePath: string;
 }
 
-export function tsImportTypes({ dryRun, organiseImports, tsConfigFilePath }: Options) {
-  console.log(chalk.blue(`- Loading Project: ${relative(process.cwd(), tsConfigFilePath)}`));
-  const project = new Project({ tsConfigFilePath });
+export function tsImportTypes({ dryRun, organiseImports, sourcePatterns, tsConfigFilePath }: Options) {
+  console.log(chalk.blue(`- Loading project: ${relative(process.cwd(), tsConfigFilePath)}`));
 
-  project.getSourceFiles().forEach(function visitSourceFile(sourceFile) {
-    console.log(chalk.blue(`- Processing File: ${relative(process.cwd(), sourceFile.getFilePath())}`));
+  const project = new Project({ tsConfigFilePath });
+  const sourceFiles = sourcePatterns.length ? project.getSourceFiles(sourcePatterns) : project.getSourceFiles();
+
+  console.log(chalk.blue(`- Found ${sourceFiles.length} files`));
+
+  sourceFiles.forEach(function visitSourceFile(sourceFile) {
+    console.log(chalk.blue(`- Processing file: ${relative(process.cwd(), sourceFile.getFilePath())}`));
 
     const importDeclarations = sourceFile.getImportDeclarations();
     const importsByModuleSpecifierValue: Record<string, ModuleImports> = {};
