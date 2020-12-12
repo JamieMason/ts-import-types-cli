@@ -1,3 +1,12 @@
+## [0.3.1](https://github.com/JamieMason/ts-import-types-cli/compare/0.3.0...0.3.1) (2020-12-12)
+
+
+### Bug Fixes
+
+* **aliases:** handle import { name as alias } ([548d276](https://github.com/JamieMason/ts-import-types-cli/commit/548d2761d0e8109c61b21f7c3d0fe25c0710b57a))
+
+
+
 # [0.3.0](https://github.com/JamieMason/ts-import-types-cli/compare/0.2.0...0.3.0) (2020-12-12)
 
 
