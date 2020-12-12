@@ -1,3 +1,12 @@
+# [0.3.0](https://github.com/JamieMason/ts-import-types-cli/compare/0.2.0...0.3.0) (2020-12-12)
+
+
+### Features
+
+* **cli:** accept multiple glob patterns to .ts files ([aa05415](https://github.com/JamieMason/ts-import-types-cli/commit/aa0541503ec30bd0610d7b3b42e6f63ad835e50c))
+
+
+
 # [0.2.0](https://github.com/JamieMason/ts-import-types-cli/compare/0.1.0...0.2.0) (2020-12-12)
 
 
