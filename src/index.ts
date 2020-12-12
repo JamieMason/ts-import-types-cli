@@ -43,8 +43,18 @@ export function tsImportTypes({ dryRun, organiseImports, sourcePatterns, tsConfi
       };
 
       namedImports.forEach(function visitNamedImport(namedImport) {
+        const alias = namedImport.getAliasNode()?.getText();
         const definitions = namedImport.getNameNode().getDefinitions();
-        definitions.forEach(collectImports(moduleSpecifierValue));
+        definitions.forEach(function collectImports(definition: DefinitionInfo<ts.DefinitionInfo>) {
+          const definitionName = definition.getName();
+          const finalName = alias ? `${definitionName} as ${alias}` : definitionName;
+          const definitionKind = definition.getKind();
+          if (['type', 'interface'].includes(definitionKind)) {
+            importsByModuleSpecifierValue[moduleSpecifierValue].types.push(finalName);
+          } else {
+            importsByModuleSpecifierValue[moduleSpecifierValue].code.push(finalName);
+          }
+        });
       });
 
       importDeclaration.remove();
@@ -78,18 +88,6 @@ export function tsImportTypes({ dryRun, organiseImports, sourcePatterns, tsConfi
       console.log(sourceFile.getText());
     } else {
       sourceFile.saveSync();
-    }
-
-    function collectImports(moduleSpecifierValue: string) {
-      return function importCollector(definition: DefinitionInfo<ts.DefinitionInfo>) {
-        const definitionName = definition.getName();
-        const definitionKind = definition.getKind();
-        if (['type', 'interface'].includes(definitionKind)) {
-          importsByModuleSpecifierValue[moduleSpecifierValue].types.push(definitionName);
-        } else {
-          importsByModuleSpecifierValue[moduleSpecifierValue].code.push(definitionName);
-        }
-      };
     }
   });
 }
