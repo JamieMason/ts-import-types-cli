@@ -1,7 +1,7 @@
 {
   "name": "ts-import-types-cli",
   "description": "Autofix TypeScript types to be imported using `import type`",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "author": "Jamie Mason <jamie@foldleft.io> (https://github.com/JamieMason)",
   "bin": {
     "ts-import-types-cli": "dist/bin.js"
