@@ -1,7 +1,7 @@
-import { DefinitionInfo, ImportDeclaration, ImportSpecifier, Project, SourceFile, ts } from 'ts-morph';
+import chalk from 'chalk';
 import { EOL } from 'os';
 import { relative } from 'path';
-import chalk from 'chalk';
+import { DefinitionInfo, ImportDeclaration, ImportSpecifier, Project, SourceFile, ts } from 'ts-morph';
 
 interface ModuleImports {
   /** import { someImplementation } from './file' */
@@ -40,6 +40,7 @@ export function tsImportTypes({ dryRun, organiseImports, sourcePatterns, tsConfi
 
   const project = new Project({ tsConfigFilePath });
   const sourceFiles = getSourceFiles(sourcePatterns, project);
+  const filesWithRewrittenDirectives: string[] = [];
 
   info('Found', sourceFiles.length, 'files');
 
@@ -50,6 +51,17 @@ export function tsImportTypes({ dryRun, organiseImports, sourcePatterns, tsConfi
       const importDeclarations = sourceFile.getImportDeclarations();
       const imports: Record<string, ModuleImports> = {};
       const rewrittenImports: string[] = [];
+      const rewrittenDirectives: string[] = [];
+
+      sourceFile.getPathReferenceDirectives().forEach((directive) => {
+        rewrittenDirectives.push(`/// <reference path="${directive.getText()}" />`);
+      });
+      sourceFile.getTypeReferenceDirectives().forEach((directive) => {
+        rewrittenDirectives.push(`/// <reference type="${directive.getText()}" />`);
+      });
+      sourceFile.getLibReferenceDirectives().forEach((directive) => {
+        rewrittenDirectives.push(`/// <reference lib="${directive.getText()}" />`);
+      });
 
       /** import Default, { named1, named2 as alias } from './file' */
       importDeclarations.forEach((importDeclaration: ImportDeclaration) => {
@@ -121,6 +133,11 @@ export function tsImportTypes({ dryRun, organiseImports, sourcePatterns, tsConfi
 
       console.log(chalk.green('✓', getRelativePath(sourceFile)));
 
+      if (rewrittenDirectives.length > 0) {
+        filesWithRewrittenDirectives.push(getRelativePath(sourceFile));
+        console.log(chalk.yellow('! contains triple-slash directives'));
+      }
+
       sourceFile.insertText(0, rewrittenImports.join(EOL) + EOL + EOL);
 
       if (organiseImports !== false) {
@@ -136,4 +153,26 @@ export function tsImportTypes({ dryRun, organiseImports, sourcePatterns, tsConfi
       console.log(chalk.red('×', getRelativePath(sourceFile)));
     }
   });
+
+  console.log('');
+  console.log(chalk.bgGreen.black(' Complete '));
+  console.log('');
+
+  if (filesWithRewrittenDirectives.length > 0) {
+    console.log(
+      chalk.yellow(
+        `
+* Moving triple-slash directives such as /// <reference lib="webworker" /> back
+  to the top of the file is not yet supported. If you know how to do this using
+  https://ts-morph.com please open a PR or otherwise let me know.
+
+  https://github.com/JamieMason/ts-import-types-cli/pulls
+
+  Unfortunately until then, the following files will need their triple-slash
+  directives manually moving back to the top of the file:
+${filesWithRewrittenDirectives.map((filePath) => `\n  - ${filePath}`).join('')}
+`.trim(),
+      ),
+    );
+  }
 }
