@@ -48,10 +48,15 @@ import type { AlgoliaInterpreter, AlgoliaMachine } from '../machine/types'
 // ...the rest of the file
 ```
 
-## Project Status
+## Triple-Slash Directives
 
-Version 0.3.0 was written in 3-4 hours and although I've run it on some very
-large projects and not run into issues yet, there'll surely be some edge cases
-out there I've not yet encountered.
+Moving triple-slash directives such as `/// <reference lib="webworker" />` back
+to the top of the file is not yet supported. If you know how to do this using
+https://ts-morph.com please [open a
+PR](https://github.com/JamieMason/ts-import-types-cli/pulls) or otherwise let me
+know.
 
-Pull Requests are welcome.
+Unfortunately until then, files will need their triple-slash directives manually
+moving back to the top of the file.
+
+`ts-import-types-cli` will output a list of which files are affected.
