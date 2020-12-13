@@ -24,7 +24,7 @@ export interface Options {
 }
 
 const info = (...messages: Array<string | number>) => {
-  console.log(chalk.blue('- ', ...messages));
+  console.log(chalk.blue('i', ...messages));
 };
 
 const getRelativePath = (sourceFile: SourceFile): string => {
@@ -36,98 +36,103 @@ const getSourceFiles = (sourcePatterns: string[], project: Project): SourceFile[
 };
 
 export function tsImportTypes({ dryRun, organiseImports, sourcePatterns, tsConfigFilePath }: Options) {
-  info('Loading project:', relative(process.cwd(), tsConfigFilePath));
+  info('Analysing', relative(process.cwd(), tsConfigFilePath));
 
   const project = new Project({ tsConfigFilePath });
   const sourceFiles = getSourceFiles(sourcePatterns, project);
 
   info('Found', sourceFiles.length, 'files');
 
-  sourceFiles.forEach((sourceFile: SourceFile) => {
-    info('Processing file:', getRelativePath(sourceFile));
+  sourceFiles.forEach((sourceFile: SourceFile, i) => {
+    try {
+      let hasChanged = false;
 
-    let hasChanged = false;
+      const importDeclarations = sourceFile.getImportDeclarations();
+      const imports: Record<string, ModuleImports> = {};
+      const rewrittenImports: string[] = [];
 
-    const importDeclarations = sourceFile.getImportDeclarations();
-    const imports: Record<string, ModuleImports> = {};
-    const rewrittenImports: string[] = [];
+      /** import Default, { named1, named2 as alias } from './file' */
+      importDeclarations.forEach((importDeclaration: ImportDeclaration) => {
+        /** Default */
+        const defaultImport = importDeclaration.getDefaultImport();
+        /** { named1, named2 as alias } */
+        const namedImports = importDeclaration.getNamedImports();
+        /** eg './file' or 'some-dependency' */
+        const modulePath = importDeclaration.getModuleSpecifierValue();
 
-    /** import Default, { named1, named2 as alias } from './file' */
-    importDeclarations.forEach((importDeclaration: ImportDeclaration) => {
-      /** Default */
-      const defaultImport = importDeclaration.getDefaultImport();
-      /** { named1, named2 as alias } */
-      const namedImports = importDeclaration.getNamedImports();
-      /** eg './file' or 'some-dependency' */
-      const modulePath = importDeclaration.getModuleSpecifierValue();
+        imports[modulePath] = imports[modulePath] || {
+          codeImports: [],
+          defaultImport: defaultImport ? defaultImport.getText() : '',
+          typeImports: [],
+        };
 
-      imports[modulePath] = imports[modulePath] || {
-        codeImports: [],
-        defaultImport: defaultImport ? defaultImport.getText() : '',
-        typeImports: [],
-      };
-
-      namedImports.forEach((namedImport: ImportSpecifier) => {
-        /** import { named2 as alias } */
-        const alias = namedImport.getAliasNode()?.getText();
-        const definitions = namedImport.getNameNode().getDefinitions();
-        /** determine whether this import is a type or an implementation */
-        definitions.forEach((definition: DefinitionInfo<ts.DefinitionInfo>) => {
-          const definitionName = definition.getName();
-          const finalName = alias ? `${definitionName} as ${alias}` : definitionName;
-          const definitionKind = definition.getKind();
-          if (['type', 'interface'].includes(definitionKind)) {
-            hasChanged = true;
-            imports[modulePath].typeImports.push(finalName);
-          } else {
-            hasChanged = true;
-            imports[modulePath].codeImports.push(finalName);
-          }
+        namedImports.forEach((namedImport: ImportSpecifier) => {
+          /** import { named2 as alias } */
+          const alias = namedImport.getAliasNode()?.getText();
+          const definitions = namedImport.getNameNode().getDefinitions();
+          /** determine whether this import is a type or an implementation */
+          definitions.forEach((definition: DefinitionInfo<ts.DefinitionInfo>) => {
+            const definitionName = definition.getName();
+            const finalName = alias ? `${definitionName} as ${alias}` : definitionName;
+            const definitionKind = definition.getKind();
+            if (['type', 'interface'].includes(definitionKind)) {
+              hasChanged = true;
+              imports[modulePath].typeImports.push(finalName);
+            } else {
+              hasChanged = true;
+              imports[modulePath].codeImports.push(finalName);
+            }
+          });
         });
+
+        if (hasChanged) {
+          importDeclaration.remove();
+        }
       });
 
-      if (hasChanged) {
-        importDeclaration.remove();
+      // write new imports for those we've collected and removed
+      Object.entries(imports).forEach(
+        ([identifier, { codeImports, defaultImport, typeImports }]: [string, ModuleImports]) => {
+          // import Default, { named1, named2 } from './file'
+          if (defaultImport && codeImports.length) {
+            rewrittenImports.push(`import ${defaultImport}, { ${codeImports.join(', ')} } from '${identifier}'`);
+          }
+          // import Default from './file'
+          if (defaultImport && !codeImports.length) {
+            rewrittenImports.push(`import ${defaultImport} from '${identifier}'`);
+          }
+          // import { named1, named2 } from './file'
+          if (!defaultImport && codeImports.length) {
+            rewrittenImports.push(`import { ${codeImports.join(', ')} } from '${identifier}'`);
+          }
+          // import type { SomeType } from './file'
+          if (typeImports.length) {
+            rewrittenImports.push(`import type { ${typeImports.join(', ')} } from '${identifier}'`);
+          }
+        },
+      );
+
+      // nothing to do
+      if (rewrittenImports.length === 0) {
+        console.log(chalk.gray('-', getRelativePath(sourceFile)));
+        return;
       }
-    });
 
-    // write new imports for those we've collected and removed
-    Object.entries(imports).forEach(
-      ([identifier, { codeImports, defaultImport, typeImports }]: [string, ModuleImports]) => {
-        // import Default, { named1, named2 } from './file'
-        if (defaultImport && codeImports.length) {
-          rewrittenImports.push(`import ${defaultImport}, { ${codeImports.join(', ')} } from '${identifier}'`);
-        }
-        // import Default from './file'
-        if (defaultImport && !codeImports.length) {
-          rewrittenImports.push(`import ${defaultImport} from '${identifier}'`);
-        }
-        // import { named1, named2 } from './file'
-        if (!defaultImport && codeImports.length) {
-          rewrittenImports.push(`import { ${codeImports.join(', ')} } from '${identifier}'`);
-        }
-        // import type { SomeType } from './file'
-        if (typeImports.length) {
-          rewrittenImports.push(`import type { ${typeImports.join(', ')} } from '${identifier}'`);
-        }
-      },
-    );
+      console.log(chalk.green('✓', getRelativePath(sourceFile)));
 
-    // nothing to do
-    if (rewrittenImports.length === 0) {
-      return;
-    }
+      sourceFile.insertText(0, rewrittenImports.join(EOL) + EOL + EOL);
 
-    sourceFile.insertText(0, rewrittenImports.join(EOL) + EOL + EOL);
+      if (organiseImports !== false) {
+        sourceFile.organizeImports();
+      }
 
-    if (organiseImports !== false) {
-      sourceFile.organizeImports();
-    }
-
-    if (dryRun === true) {
-      console.log(sourceFile.getText());
-    } else {
-      sourceFile.saveSync();
+      if (dryRun === true) {
+        console.log(sourceFile.getText());
+      } else {
+        sourceFile.saveSync();
+      }
+    } catch (err) {
+      console.log(chalk.red('×', getRelativePath(sourceFile)));
     }
   });
 }
