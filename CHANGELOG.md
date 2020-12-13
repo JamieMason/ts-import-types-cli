@@ -1,3 +1,19 @@
+## [0.6.2](https://github.com/JamieMason/ts-import-types-cli/compare/0.3.1...0.6.2) (2020-12-13)
+
+
+### Bug Fixes
+
+* **default:** output default imports correctly ([3a2a87b](https://github.com/JamieMason/ts-import-types-cli/commit/3a2a87b4f4977435917bd22b64e21efbc63b20d2))
+
+
+### Features
+
+* **directives:** highlight files with triple-slash directives ([5b664b3](https://github.com/JamieMason/ts-import-types-cli/commit/5b664b3e14be7f5c08c7504d65d962a5154b07f1))
+* **output:** skip unchanged files ([731a6e5](https://github.com/JamieMason/ts-import-types-cli/commit/731a6e5c757e03a176b866c7e70eef8be7ffa110))
+* **stdout:** improve logging output ([ace21f4](https://github.com/JamieMason/ts-import-types-cli/commit/ace21f448b9b9652e481823bb7caa30e16b2019c))
+
+
+
 ## [0.3.1](https://github.com/JamieMason/ts-import-types-cli/compare/0.3.0...0.3.1) (2020-12-12)
 
 
