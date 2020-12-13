@@ -1,84 +1,124 @@
-import { DefinitionInfo, Project, ts } from 'ts-morph';
+import { DefinitionInfo, ImportDeclaration, ImportSpecifier, Project, SourceFile, ts } from 'ts-morph';
 import { EOL } from 'os';
 import { relative } from 'path';
 import chalk from 'chalk';
 
 interface ModuleImports {
-  code: string[];
-  _default: string;
-  types: string[];
+  /** import { someImplementation } from './file' */
+  codeImports: string[];
+  /** import someImplementation from './file' */
+  defaultImport: string;
+  /** import type { SomeType } from './file' */
+  typeImports: string[];
 }
 
 export interface Options {
+  /** Write output to stdout instead of overwriting files. */
   dryRun: boolean;
+  /** Disable use of VS Code's organise imports refactoring. */
   organiseImports: boolean;
+  /** Glob patterns to .ts or .tsx files. */
   sourcePatterns: string[];
+  /** Path to tsconfig.json file. */
   tsConfigFilePath: string;
 }
 
+const info = (...messages: Array<string | number>) => {
+  console.log(chalk.blue('- ', ...messages));
+};
+
+const getRelativePath = (sourceFile: SourceFile): string => {
+  return relative(process.cwd(), sourceFile.getFilePath());
+};
+
+const getSourceFiles = (sourcePatterns: string[], project: Project): SourceFile[] => {
+  return sourcePatterns.length ? project.getSourceFiles(sourcePatterns) : project.getSourceFiles();
+};
+
 export function tsImportTypes({ dryRun, organiseImports, sourcePatterns, tsConfigFilePath }: Options) {
-  console.log(chalk.blue(`- Loading project: ${relative(process.cwd(), tsConfigFilePath)}`));
+  info('Loading project:', relative(process.cwd(), tsConfigFilePath));
 
   const project = new Project({ tsConfigFilePath });
-  const sourceFiles = sourcePatterns.length ? project.getSourceFiles(sourcePatterns) : project.getSourceFiles();
+  const sourceFiles = getSourceFiles(sourcePatterns, project);
 
-  console.log(chalk.blue(`- Found ${sourceFiles.length} files`));
+  info('Found', sourceFiles.length, 'files');
 
-  sourceFiles.forEach(function visitSourceFile(sourceFile) {
-    console.log(chalk.blue(`- Processing file: ${relative(process.cwd(), sourceFile.getFilePath())}`));
+  sourceFiles.forEach((sourceFile: SourceFile) => {
+    info('Processing file:', getRelativePath(sourceFile));
+
+    let hasChanged = false;
 
     const importDeclarations = sourceFile.getImportDeclarations();
-    const importsByModuleSpecifierValue: Record<string, ModuleImports> = {};
-    const newImports: string[] = [];
+    const imports: Record<string, ModuleImports> = {};
+    const rewrittenImports: string[] = [];
 
-    importDeclarations.forEach(function visitImportDeclaration(importDeclaration) {
-      const moduleSpecifierValue = importDeclaration.getModuleSpecifierValue();
+    /** import Default, { named1, named2 as alias } from './file' */
+    importDeclarations.forEach((importDeclaration: ImportDeclaration) => {
+      /** Default */
       const defaultImport = importDeclaration.getDefaultImport();
+      /** { named1, named2 as alias } */
       const namedImports = importDeclaration.getNamedImports();
+      /** eg './file' or 'some-dependency' */
+      const modulePath = importDeclaration.getModuleSpecifierValue();
 
-      importsByModuleSpecifierValue[moduleSpecifierValue] = importsByModuleSpecifierValue[moduleSpecifierValue] || {
-        code: [],
-        _default: defaultImport ? defaultImport.getText() : '',
-        types: [],
+      imports[modulePath] = imports[modulePath] || {
+        codeImports: [],
+        defaultImport: defaultImport ? defaultImport.getText() : '',
+        typeImports: [],
       };
 
-      namedImports.forEach(function visitNamedImport(namedImport) {
+      namedImports.forEach((namedImport: ImportSpecifier) => {
+        /** import { named2 as alias } */
         const alias = namedImport.getAliasNode()?.getText();
         const definitions = namedImport.getNameNode().getDefinitions();
-        definitions.forEach(function collectImports(definition: DefinitionInfo<ts.DefinitionInfo>) {
+        /** determine whether this import is a type or an implementation */
+        definitions.forEach((definition: DefinitionInfo<ts.DefinitionInfo>) => {
           const definitionName = definition.getName();
           const finalName = alias ? `${definitionName} as ${alias}` : definitionName;
           const definitionKind = definition.getKind();
           if (['type', 'interface'].includes(definitionKind)) {
-            importsByModuleSpecifierValue[moduleSpecifierValue].types.push(finalName);
+            hasChanged = true;
+            imports[modulePath].typeImports.push(finalName);
           } else {
-            importsByModuleSpecifierValue[moduleSpecifierValue].code.push(finalName);
+            hasChanged = true;
+            imports[modulePath].codeImports.push(finalName);
           }
         });
       });
 
-      importDeclaration.remove();
-    });
-
-    Object.entries(importsByModuleSpecifierValue).forEach(function getReplacementImportsText([
-      identifier,
-      { code, _default, types },
-    ]) {
-      if (_default && code.length) {
-        newImports.push(`import ${_default}, { ${code.join(', ')} } from '${identifier}'`);
-      }
-      if (_default && !code.length) {
-        newImports.push(`import ${_default} from '${identifier}'`);
-      }
-      if (!_default && code.length) {
-        newImports.push(`import { ${code.join(', ')} } from '${identifier}'`);
-      }
-      if (types.length) {
-        newImports.push(`import type { ${types.join(', ')} } from '${identifier}'`);
+      if (hasChanged) {
+        importDeclaration.remove();
       }
     });
 
-    sourceFile.insertText(0, newImports.join(EOL) + EOL + EOL);
+    // write new imports for those we've collected and removed
+    Object.entries(imports).forEach(
+      ([identifier, { codeImports, defaultImport, typeImports }]: [string, ModuleImports]) => {
+        // import Default, { named1, named2 } from './file'
+        if (defaultImport && codeImports.length) {
+          rewrittenImports.push(`import ${defaultImport}, { ${codeImports.join(', ')} } from '${identifier}'`);
+        }
+        // import Default from './file'
+        if (defaultImport && !codeImports.length) {
+          rewrittenImports.push(`import ${defaultImport} from '${identifier}'`);
+        }
+        // import { named1, named2 } from './file'
+        if (!defaultImport && codeImports.length) {
+          rewrittenImports.push(`import { ${codeImports.join(', ')} } from '${identifier}'`);
+        }
+        // import type { SomeType } from './file'
+        if (typeImports.length) {
+          rewrittenImports.push(`import type { ${typeImports.join(', ')} } from '${identifier}'`);
+        }
+      },
+    );
+
+    // nothing to do
+    if (rewrittenImports.length === 0) {
+      return;
+    }
+
+    sourceFile.insertText(0, rewrittenImports.join(EOL) + EOL + EOL);
 
     if (organiseImports !== false) {
       sourceFile.organizeImports();
