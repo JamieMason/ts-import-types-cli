@@ -62,9 +62,14 @@ export function tsImportTypes({ dryRun, organiseImports, sourcePatterns, tsConfi
 
         imports[modulePath] = imports[modulePath] || {
           codeImports: [],
-          defaultImport: defaultImport ? defaultImport.getText() : '',
+          defaultImport: '',
           typeImports: [],
         };
+
+        if (defaultImport) {
+          imports[modulePath].defaultImport = defaultImport.getText();
+          hasChanged = true;
+        }
 
         namedImports.forEach((namedImport: ImportSpecifier) => {
           /** import { named2 as alias } */
@@ -93,19 +98,15 @@ export function tsImportTypes({ dryRun, organiseImports, sourcePatterns, tsConfi
       // write new imports for those we've collected and removed
       Object.entries(imports).forEach(
         ([identifier, { codeImports, defaultImport, typeImports }]: [string, ModuleImports]) => {
-          // import Default, { named1, named2 } from './file'
           if (defaultImport && codeImports.length) {
             rewrittenImports.push(`import ${defaultImport}, { ${codeImports.join(', ')} } from '${identifier}'`);
           }
-          // import Default from './file'
           if (defaultImport && !codeImports.length) {
             rewrittenImports.push(`import ${defaultImport} from '${identifier}'`);
           }
-          // import { named1, named2 } from './file'
           if (!defaultImport && codeImports.length) {
             rewrittenImports.push(`import { ${codeImports.join(', ')} } from '${identifier}'`);
           }
-          // import type { SomeType } from './file'
           if (typeImports.length) {
             rewrittenImports.push(`import type { ${typeImports.join(', ')} } from '${identifier}'`);
           }
