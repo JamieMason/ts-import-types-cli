@@ -4,6 +4,8 @@ import chalk = require('chalk');
 import program = require('commander');
 import { resolve } from 'path';
 import { tsImportTypes } from '.';
+import stripJsonComments from 'strip-json-comments';
+import fs from 'fs';
 
 const sourcePatterns: string[] = [];
 
@@ -24,7 +26,7 @@ const project = program.project || './tsconfig.json';
 const tsConfigFilePath = resolve(process.cwd(), project);
 
 try {
-  require(tsConfigFilePath);
+  JSON.parse(stripJsonComments(fs.readFileSync(tsConfigFilePath, 'utf8')));
 } catch (err) {
   const message = `ts-import-types-cli --project ${tsConfigFilePath} is not a tsconfig.json file`;
   console.error(chalk.red(message));
