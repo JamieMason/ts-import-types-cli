@@ -3,7 +3,8 @@
 import chalk = require('chalk');
 import program = require('commander');
 import { resolve } from 'path';
-import { tsImportTypes } from '.';
+import { readStdin } from './helpers';
+import { tsImportTypes, tsImportTypesStdio } from '.';
 
 const sourcePatterns: string[] = [];
 
@@ -16,10 +17,14 @@ program
   .option('-d, --dry-run', 'write output to stdout instead of overwriting files')
   .option('-p, --project [path]', 'path to tsconfig.json')
   .option('-O, --no-organise-imports', "disable use of VS Code's organise imports refactoring")
+  .option('--stdio', 'read from stdin and write to stdout')
+  .option('--file-path [path]', 'file location to use for --stdio source code')
   .parse(process.argv);
 
 const dryRun = program.dryRun === true;
 const organiseImports = program.organiseImports !== false;
+const stdio = program.stdio === true;
+const filePath = program.filePath;
 const project = program.project || './tsconfig.json';
 const tsConfigFilePath = resolve(process.cwd(), project);
 
@@ -31,14 +36,22 @@ try {
   process.exit(1);
 }
 
-try {
+async function main() {
+  if (stdio) {
+    const source = await readStdin();
+    const result = tsImportTypesStdio({ filePath, source, tsConfigFilePath });
+    process.stdout.write(result);
+    return;
+  }
   tsImportTypes({
     dryRun,
     organiseImports,
     sourcePatterns,
     tsConfigFilePath,
   });
-} catch (err) {
+}
+
+main().catch(err => {
   console.error(
     chalk.red('! %s\n\n! Please raise an issue at %s\n\n%s'),
     err.message,
@@ -46,4 +59,4 @@ try {
     String(err.stack).replace(/^/gm, '    '),
   );
   process.exit(1);
-}
+});
